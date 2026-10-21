@@ -1,6 +1,6 @@
-// MAIN PROCESS: runs in Node.js. It starts the app and creates the window.
-// Later, this is where the database and price fetching will live.
-import { app, shell, BrowserWindow } from 'electron'
+// MAIN PROCESS: runs in Node.js. It starts the app, creates the window,
+// and fetches prices from the internet for the UI.
+import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -44,6 +44,14 @@ app.whenReady().then(() => {
   // F12 opens DevTools in development.
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  // The UI calls window.api.getSilverPrice(), which arrives here.
+  // Returns the silver spot price in USD per troy ounce.
+  ipcMain.handle('get-silver-price', async () => {
+    const response = await fetch('https://api.gold-api.com/price/XAG')
+    const data = await response.json()
+    return data.price as number
   })
 
   createWindow()
