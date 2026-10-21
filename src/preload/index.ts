@@ -1,9 +1,12 @@
 // PRELOAD: the bridge between the UI (renderer) and the main process.
 // Anything added to `api` here becomes available in React as `window.api`.
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-const api = {}
+const api = {
+  // Asks the main process for the silver price (see 'get-silver-price' in src/main/index.ts).
+  getSilverPrice: (): Promise<number> => ipcRenderer.invoke('get-silver-price')
+}
 
 if (process.contextIsolated) {
   try {
