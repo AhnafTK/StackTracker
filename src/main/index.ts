@@ -5,6 +5,14 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+// Gets the current price of one metal from gold-api.com.
+// XAG = silver, XAU = gold. Price is in USD per troy ounce.
+async function fetchPrice(symbol: 'XAG' | 'XAU'): Promise<number> {
+  const response = await fetch(`https://api.gold-api.com/price/${symbol}`)
+  const data = await response.json()
+  return data.price
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1100,
@@ -46,12 +54,11 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // The UI calls window.api.getSilverPrice(), which arrives here.
-  // Returns the silver spot price in USD per troy ounce.
-  ipcMain.handle('get-silver-price', async () => {
-    const response = await fetch('https://api.gold-api.com/price/XAG')
-    const data = await response.json()
-    return data.price as number
+  // The UI calls window.api.getSpotPrices(), which arrives here.
+  // Returns silver and gold spot prices in USD per troy ounce.
+  ipcMain.handle('get-spot-prices', async () => {
+    const [silver, gold] = await Promise.all([fetchPrice('XAG'), fetchPrice('XAU')])
+    return { silver, gold }
   })
 
   createWindow()
