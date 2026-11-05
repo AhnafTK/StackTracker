@@ -16,6 +16,7 @@ function App(): React.JSX.Element {
   // Kept in memory only for now, so holdings disappear when the app closes.
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
+  const [editingHolding, setEditingHolding] = useState<Holding | null>(null)
 
   function showPrice(latest: number): void {
     setSilverPrice(latest)
@@ -32,9 +33,28 @@ function App(): React.JSX.Element {
     window.api.getSilverPrice().then(showPrice)
   }
 
-  function addHolding(newHolding: NewHolding): void {
-    setHoldings((current) => [...current, { ...newHolding, id: crypto.randomUUID() }])
+  function saveHolding(updatedHolding: NewHolding): void {
+    if (editingHolding) {
+      setHoldings((current) =>
+        current.map((holding) =>
+          holding.id === editingHolding.id ? { ...updatedHolding, id: holding.id } : holding
+        )
+      )
+    } else {
+      setHoldings((current) => [...current, { ...updatedHolding, id: crypto.randomUUID() }])
+    }
+
     setShowAddModal(false)
+    setEditingHolding(null)
+  }
+
+  function closeHoldingModal(): void {
+    setShowAddModal(false)
+    setEditingHolding(null)
+  }
+
+  function deleteHolding(id: string): void {
+    setHoldings((current) => current.filter((holding) => holding.id !== id))
   }
 
   return (
@@ -46,11 +66,18 @@ function App(): React.JSX.Element {
           holdings={holdings}
           silverPrice={silverPrice}
           onAddClick={() => setShowAddModal(true)}
+          onEdit={setEditingHolding}
+          onDelete={deleteHolding}
         />
       </div>
 
-      {showAddModal && (
-        <AddHoldingModal onAdd={addHolding} onClose={() => setShowAddModal(false)} />
+      {(showAddModal || editingHolding) && (
+        <AddHoldingModal
+          key={editingHolding?.id ?? 'new'}
+          initialHolding={editingHolding ?? undefined}
+          onSave={saveHolding}
+          onClose={closeHoldingModal}
+        />
       )}
     </main>
   )

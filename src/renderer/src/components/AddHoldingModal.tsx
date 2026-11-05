@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react'
-import type { NewHolding, WeightUnit } from '../holdings'
+import type { Holding, NewHolding, WeightUnit } from '../holdings'
 
 interface Props {
-  onAdd: (holding: NewHolding) => void
+  initialHolding?: Holding
+  onSave: (holding: NewHolding) => void
   onClose: () => void
 }
 
 const PURITY_PRESETS = ['0.9999', '0.999', '0.925', '0.9']
 
 // Form inputs are kept as text while typing, then turned into numbers on submit.
-function AddHoldingModal({ onAdd, onClose }: Props): React.JSX.Element {
-  const [name, setName] = useState('')
-  const [weight, setWeight] = useState('1')
-  const [unit, setUnit] = useState<WeightUnit>('oz')
-  const [purity, setPurity] = useState('0.9999')
-  const [quantity, setQuantity] = useState('1')
-  const [pricePerItem, setPricePerItem] = useState('')
+function AddHoldingModal({ initialHolding, onSave, onClose }: Props): React.JSX.Element {
+  const [name, setName] = useState(initialHolding?.name ?? '')
+  const [weight, setWeight] = useState(String(initialHolding?.weight ?? 1))
+  const [unit, setUnit] = useState<WeightUnit>(initialHolding?.unit ?? 'oz')
+  const [purity, setPurity] = useState(String(initialHolding?.purity ?? '0.9999'))
+  const [quantity, setQuantity] = useState(String(initialHolding?.quantity ?? 1))
+  const [pricePerItem, setPricePerItem] = useState(
+    initialHolding ? String(initialHolding.pricePerItem) : ''
+  )
   const [error, setError] = useState<string | null>(null)
 
   // Close with the Escape key.
@@ -44,7 +47,7 @@ function AddHoldingModal({ onAdd, onClose }: Props): React.JSX.Element {
     if (pricePerItem.trim() === '' || !(priceNum >= 0))
       return setError('Enter the price you paid per item.')
 
-    onAdd({
+    onSave({
       name: name.trim(),
       weight: weightNum,
       unit,
@@ -70,7 +73,9 @@ function AddHoldingModal({ onAdd, onClose }: Props): React.JSX.Element {
         onSubmit={submit}
         className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-900 shadow-2xl"
       >
-        <h2 className="border-b border-neutral-800 px-6 py-4 text-lg font-semibold">Add holding</h2>
+        <h2 className="border-b border-neutral-800 px-6 py-4 text-lg font-semibold">
+          {initialHolding ? 'Edit holding' : 'Add holding'}
+        </h2>
 
         <div className="flex flex-col gap-4 px-6 py-5">
           <div>
@@ -168,7 +173,7 @@ function AddHoldingModal({ onAdd, onClose }: Props): React.JSX.Element {
             type="submit"
             className="rounded-md bg-amber-300 px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-amber-200"
           >
-            Add
+            {initialHolding ? 'Save changes' : 'Add'}
           </button>
         </div>
       </form>
