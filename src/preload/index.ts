@@ -3,11 +3,27 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-const api = {
-  // Asks the main process for silver and gold prices (see 'get-spot-prices' in src/main/index.ts).
+  const api = {
+  // Get silver and gold prices
   getSpotPrices: (): Promise<{ silver: number; gold: number }> =>
-    ipcRenderer.invoke('get-spot-prices')
+    ipcRenderer.invoke('get-spot-prices'),
+
+  // Retrieve holdings from SQLite
+  getHoldings: () =>
+    ipcRenderer.invoke('holdings:get'),
+
+  // Save a holding to SQLite
+  addHolding: (holding: {
+    name: string
+    weight: number
+    unit: 'oz' | 'g' | 'kg'
+    purity: number
+    quantity: number
+    pricePerItem: number
+  }) => ipcRenderer.invoke('holdings:add', holding)
 }
+
+
 
 if (process.contextIsolated) {
   try {
