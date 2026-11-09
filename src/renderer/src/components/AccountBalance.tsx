@@ -1,16 +1,16 @@
-import { formatMoney, holdingValue, type Holding } from '../holdings'
+import { formatMoney, holdingValue, type Holding, type SpotPrices } from '../holdings'
 
 interface Props {
   holdings: Holding[]
-  silverPrice: number | null
+  prices: SpotPrices | null
 }
 
-// The combined value of all holdings at the current silver price.
-function AccountBalance({ holdings, silverPrice }: Props): React.JSX.Element {
+// The combined value of all holdings, each at the current price of its metal.
+function AccountBalance({ holdings, prices }: Props): React.JSX.Element {
   let total = 0
-  if (silverPrice !== null) {
+  if (prices !== null) {
     for (const h of holdings) {
-      total += holdingValue(h, silverPrice)
+      total += holdingValue(h, prices)
     }
   }
 
@@ -18,7 +18,7 @@ function AccountBalance({ holdings, silverPrice }: Props): React.JSX.Element {
     <div className="flex flex-col items-center gap-2">
       <p className="text-sm uppercase tracking-widest text-neutral-400">Account balance</p>
       <p className="text-6xl font-semibold tabular-nums">
-        {silverPrice === null ? '—' : formatMoney(total)}
+        {prices === null ? '—' : formatMoney(total)}
       </p>
     </div>
   )
