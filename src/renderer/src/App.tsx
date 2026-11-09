@@ -8,20 +8,17 @@ import AccountBalance from './components/AccountBalance'
 import SpotPrices from './components/SpotPrices'
 import HoldingsList from './components/HoldingsList'
 import AddHoldingModal from './components/AddHoldingModal'
-import type { Holding, NewHolding } from './holdings'
+import type { Holding, NewHolding, SpotPrices as Prices } from './holdings'
 
 function App(): React.JSX.Element {
-  const [prices, setPrices] = useState<{ silver: number; gold: number } | null>(null)
+  const [prices, setPrices] = useState<Prices | null>(null)
   const [loadingPrice, setLoadingPrice] = useState(true)
   // Kept in memory only for now, so holdings disappear when the app closes.
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null)
 
-  // Holdings are all silver for now, so the balance uses the silver price.
-  const silverPrice = prices?.silver ?? null
-
-  function showPrices(latest: { silver: number; gold: number }): void {
+  function showPrices(latest: Prices): void {
     setPrices(latest)
     setLoadingPrice(false)
   }
@@ -63,11 +60,11 @@ function App(): React.JSX.Element {
   return (
     <main className="flex min-h-full justify-center px-6 py-16">
       <div className="flex w-full max-w-xl flex-col items-center gap-10">
-        <AccountBalance holdings={holdings} silverPrice={silverPrice} />
+        <AccountBalance holdings={holdings} prices={prices} />
         <SpotPrices prices={prices} loading={loadingPrice} onRefresh={refreshPrices} />
         <HoldingsList
           holdings={holdings}
-          silverPrice={silverPrice}
+          prices={prices}
           onAddClick={() => setShowAddModal(true)}
           onEdit={setEditingHolding}
           onDelete={deleteHolding}
@@ -78,6 +75,7 @@ function App(): React.JSX.Element {
         <AddHoldingModal
           key={editingHolding?.id ?? 'new'}
           initialHolding={editingHolding ?? undefined}
+          prices={prices}
           onSave={saveHolding}
           onClose={closeHoldingModal}
         />

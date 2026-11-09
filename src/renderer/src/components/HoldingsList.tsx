@@ -1,8 +1,8 @@
-import { formatMoney, holdingValue, type Holding } from '../holdings'
+import { formatMoney, holdingValue, type Holding, type SpotPrices } from '../holdings'
 
 interface Props {
   holdings: Holding[]
-  silverPrice: number | null
+  prices: SpotPrices | null
   onAddClick: () => void
   onEdit: (holding: Holding) => void
   onDelete: (id: string) => void
@@ -12,7 +12,7 @@ const UNIT_LABEL = { oz: 'oz', g: 'g', kg: 'kg' }
 
 function HoldingsList({
   holdings,
-  silverPrice,
+  prices,
   onAddClick,
   onEdit,
   onDelete
@@ -41,17 +41,22 @@ function HoldingsList({
               className="flex items-center justify-between gap-4 border-b border-neutral-800 px-5 py-3 last:border-0"
             >
               <div className="min-w-0">
-                <p className="truncate">
+                <p className="flex items-center gap-2 truncate">
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${h.metal === 'gold' ? 'bg-amber-400' : 'bg-neutral-300'}`}
+                    title={h.metal === 'gold' ? 'Gold' : 'Silver'}
+                  />
                   {h.name} <span className="text-neutral-400">×{h.quantity}</span>
                 </p>
                 <p className="text-xs text-neutral-500">
                   {h.weight} {UNIT_LABEL[h.unit]} · {h.purity} pure · paid{' '}
                   {formatMoney(h.pricePerItem)} each
+                  {h.purchaseDate && <> · {h.purchaseDate}</>}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <p className="tabular-nums">
-                  {silverPrice === null ? '—' : formatMoney(holdingValue(h, silverPrice))}
+                  {prices === null ? '—' : formatMoney(holdingValue(h, prices))}
                 </p>
                 <button
                   type="button"
