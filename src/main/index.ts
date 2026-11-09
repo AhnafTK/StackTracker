@@ -1,5 +1,6 @@
 // MAIN PROCESS: runs in Node.js. It starts the app, creates the window,
 // and fetches prices from the internet for the UI.
+import { initializeDatabase } from './database'
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -40,7 +41,8 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.stacktracker.app')
-
+  //initialize the database when the app is ready
+  initializeDatabase()
   // F12 opens DevTools in development.
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
