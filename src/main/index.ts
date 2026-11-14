@@ -1,13 +1,19 @@
-// MAIN PROCESS: runs in Node.js. It starts the app, creates the window,
-// and fetches prices from the internet for the UI.
-import { initializeDatabase, addHolding, getHoldings } from './database'
+
+import {
+  initializeDatabase,
+  addHolding,
+  getHoldings,
+  updateHolding,
+  deleteHolding
+} from './database'
+import type { NewHolding } from './database'
+
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
-// Gets the current price of one metal from gold-api.com.
-// XAG = silver, XAU = gold. Price is in USD per troy ounce.
+// Fetch current silver or gold spot price
 async function fetchPrice(symbol: 'XAG' | 'XAU'): Promise<number> {
   const response = await fetch(`https://api.gold-api.com/price/${symbol}`)
   const data = await response.json()
@@ -32,14 +38,11 @@ function createWindow(): void {
     mainWindow.show()
   })
 
-  // Open external links in the user's browser, not inside the app.
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // In development, load the Vite dev server (with hot reload).
-  // In the packaged app, load the built HTML file.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -49,36 +52,53 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.stacktracker.app')
-  //initialize the database when the app is ready
-  initializeDatabase()
-  ipcMain.handle('holdings:get', () => {
-  return getHoldings()
-})
 
-ipcMain.handle('holdings:add', (_event, holding) => {
-  return addHolding(holding)
-})
-  // F12 opens DevTools in development.
+  // Initialize SQLite
+  initializeDatabase()
+
+  // Retrieve saved holdings
+  ipcMain.handle('holdings:get', () => {
+    return getHoldings()
+  })
+
+  // Add a new holding
+  ipcMain.handle('holdings:add', (_event, holding: NewHolding) => {
+    return addHolding(holding)
+  })
+
+  // Update an existing holding
+  ipcMain.handle('holdings:update', (_event, id: string, holding: NewHolding) => {
+    return updateHolding(id, holding)
+  })
+
+  // Delete an existing holding
+  ipcMain.handle('holdings:delete', (_event, id: string) => {
+    deleteHolding(id)
+  })
+
+  // Development keyboard shortcuts
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // The UI calls window.api.getSpotPrices(), which arrives here.
-  // Returns silver and gold spot prices in USD per troy ounce.
+  // Fetch silver and gold prices
   ipcMain.handle('get-spot-prices', async () => {
-    const [silver, gold] = await Promise.all([fetchPrice('XAG'), fetchPrice('XAU')])
+    const [silver, gold] = await Promise.all([
+      fetchPrice('XAG'),
+      fetchPrice('XAU')
+    ])
     return { silver, gold }
   })
 
   createWindow()
 
-  // macOS: re-create the window when the dock icon is clicked.
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    }
   })
 })
 
-// Quit when all windows are closed, except on macOS.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()

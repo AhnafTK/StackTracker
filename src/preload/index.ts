@@ -3,24 +3,38 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-  const api = {
-  // Get silver and gold prices
+ 
+const api = {
   getSpotPrices: (): Promise<{ silver: number; gold: number }> =>
     ipcRenderer.invoke('get-spot-prices'),
 
-  // Retrieve holdings from SQLite
   getHoldings: () =>
     ipcRenderer.invoke('holdings:get'),
 
-  // Save a holding to SQLite
   addHolding: (holding: {
+    metal: 'silver' | 'gold'
     name: string
     weight: number
     unit: 'oz' | 'g' | 'kg'
     purity: number
     quantity: number
     pricePerItem: number
-  }) => ipcRenderer.invoke('holdings:add', holding)
+    purchaseDate: string | null
+  }) => ipcRenderer.invoke('holdings:add', holding),
+
+  updateHolding: (id: string, holding: {
+    metal: 'silver' | 'gold'
+    name: string
+    weight: number
+    unit: 'oz' | 'g' | 'kg'
+    purity: number
+    quantity: number
+    pricePerItem: number
+    purchaseDate: string | null
+  }) => ipcRenderer.invoke('holdings:update', id, holding),
+
+  deleteHolding: (id: string): Promise<void> =>
+    ipcRenderer.invoke('holdings:delete', id)
 }
 
 
