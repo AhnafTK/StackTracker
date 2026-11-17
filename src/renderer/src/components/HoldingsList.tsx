@@ -1,11 +1,11 @@
-import { formatMoney, holdingValue, type Holding, type SpotPrices } from '../holdings'
+import { formatCents, formatMoney, holdingValue, type Holding, type SpotPrices } from '../holdings'
 
 interface Props {
   holdings: Holding[]
   prices: SpotPrices | null
   onAddClick: () => void
   onEdit: (holding: Holding) => void
-  onDelete: (id: string) => void
+  onDelete: (id: number) => void
 }
 
 const UNIT_LABEL = { oz: 'oz', g: 'g', kg: 'kg' }
@@ -50,7 +50,7 @@ function HoldingsList({
                 </p>
                 <p className="text-xs text-neutral-500">
                   {h.weight} {UNIT_LABEL[h.unit]} · {h.purity} pure · paid{' '}
-                  {formatMoney(h.pricePerItem)} each
+                  {formatCents(h.pricePerItemCents)} each
                   {h.purchaseDate && <> · {h.purchaseDate}</>}
                 </p>
               </div>

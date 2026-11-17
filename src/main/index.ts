@@ -1,9 +1,13 @@
 // MAIN PROCESS: runs in Node.js. It starts the app, creates the window,
-// and fetches prices from the internet for the UI.
+// fetches prices from the internet, and owns the database.
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { openDatabase, type DB } from './db'
+import * as holdingsRepo from './holdingsRepo'
+
+let db: DB | null = null
 
 // Gets the current price of one metal from gold-api.com.
 // XAG = silver, XAU = gold. Price is in USD per troy ounce.
@@ -61,6 +65,31 @@ app.whenReady().then(() => {
     return { silver, gold }
   })
 
+  // The database file lives in the app's data folder:
+  //   Windows: %APPDATA%\StackTracker\stacktracker.db
+  //   macOS:   ~/Library/Application Support/StackTracker/stacktracker.db
+  const dbPath = join(app.getPath('userData'), 'stacktracker.db')
+  const database = openDatabase(dbPath)
+  db = database
+  console.log(`[StackTracker] database: ${dbPath}`)
+
+  // Holdings: the UI calls window.api.listHoldings() etc., which arrive here.
+  // Data from the UI is checked before it reaches the database.
+  ipcMain.handle('holdings:list', () => holdingsRepo.listHoldings(database))
+  ipcMain.handle('holdings:add', (_event, holding: unknown) =>
+    holdingsRepo.addHolding(database, holdingsRepo.checkHolding(holding))
+  )
+  ipcMain.handle('holdings:update', (_event, id: unknown, holding: unknown) =>
+    holdingsRepo.updateHolding(
+      database,
+      holdingsRepo.checkId(id),
+      holdingsRepo.checkHolding(holding)
+    )
+  )
+  ipcMain.handle('holdings:delete', (_event, id: unknown) =>
+    holdingsRepo.deleteHolding(database, holdingsRepo.checkId(id))
+  )
+
   createWindow()
 
   // macOS: re-create the window when the dock icon is clicked.
@@ -74,4 +103,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Close the database cleanly when the app exits.
+app.on('will-quit', () => {
+  db?.close()
 })

@@ -13,7 +13,8 @@ import type { Holding, NewHolding, SpotPrices as Prices } from './holdings'
 function App(): React.JSX.Element {
   const [prices, setPrices] = useState<Prices | null>(null)
   const [loadingPrice, setLoadingPrice] = useState(true)
-  // Kept in memory only for now, so holdings disappear when the app closes.
+  // A copy of what's in the database. Every change goes to the database first,
+  // then this list is updated with what the database returned.
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null)
@@ -23,9 +24,10 @@ function App(): React.JSX.Element {
     setLoadingPrice(false)
   }
 
-  // Fetch the prices once when the app opens.
+  // When the app opens: fetch prices and load saved holdings.
   useEffect(() => {
     window.api.getSpotPrices().then(showPrices)
+    window.api.listHoldings().then(setHoldings)
   }, [])
 
   function refreshPrices(): void {
@@ -33,15 +35,13 @@ function App(): React.JSX.Element {
     window.api.getSpotPrices().then(showPrices)
   }
 
-  function saveHolding(updatedHolding: NewHolding): void {
+  async function saveHolding(holding: NewHolding): Promise<void> {
     if (editingHolding) {
-      setHoldings((current) =>
-        current.map((holding) =>
-          holding.id === editingHolding.id ? { ...updatedHolding, id: holding.id } : holding
-        )
-      )
+      const updated = await window.api.updateHolding(editingHolding.id, holding)
+      setHoldings((current) => current.map((h) => (h.id === updated.id ? updated : h)))
     } else {
-      setHoldings((current) => [...current, { ...updatedHolding, id: crypto.randomUUID() }])
+      const created = await window.api.addHolding(holding)
+      setHoldings((current) => [...current, created])
     }
 
     setShowAddModal(false)
@@ -53,7 +53,8 @@ function App(): React.JSX.Element {
     setEditingHolding(null)
   }
 
-  function deleteHolding(id: string): void {
+  async function deleteHolding(id: number): Promise<void> {
+    await window.api.deleteHolding(id)
     setHoldings((current) => current.filter((holding) => holding.id !== id))
   }
 

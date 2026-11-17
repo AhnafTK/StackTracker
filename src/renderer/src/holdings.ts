@@ -1,33 +1,8 @@
 // What a holding is, and the math for valuing it.
 
-export type Metal = 'silver' | 'gold'
-export type WeightUnit = 'oz' | 'g' | 'kg'
-
-/** Spot prices in USD per troy ounce. */
-export interface SpotPrices {
-  silver: number
-  gold: number
-}
-
-export interface Holding {
-  id: string
-  metal: Metal
-  name: string
-  /** Weight of ONE item, in `unit`. */
-  weight: number
-  /** 'oz' means troy ounces, the standard unit for precious metals. */
-  unit: WeightUnit
-  /** Fraction of pure metal, e.g. 0.9999 */
-  purity: number
-  quantity: number
-  /** What you paid for ONE item. */
-  pricePerItem: number
-  /** "YYYY-MM-DD", or null if not entered. */
-  purchaseDate: string | null
-}
-
-/** A holding before it has an id, i.e. what the Add form produces. */
-export type NewHolding = Omit<Holding, 'id'>
+// The types are shared with the main process, so they live in src/shared/types.ts.
+import type { Holding, WeightUnit, SpotPrices } from '../../shared/types'
+export type { Holding, Metal, NewHolding, SpotPrices, WeightUnit } from '../../shared/types'
 
 const GRAMS_PER_TROY_OUNCE = 31.1034768
 
@@ -52,4 +27,14 @@ export function holdingValue(
 
 export function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+}
+
+/** Formats a whole-cents amount, e.g. 3650 → "$36.50". */
+export function formatCents(cents: number): string {
+  return formatMoney(cents / 100)
+}
+
+/** Turns what the user typed ("36.5") into whole cents (3650). */
+export function dollarsToCents(dollars: number): number {
+  return Math.round(dollars * 100)
 }

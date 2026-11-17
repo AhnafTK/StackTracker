@@ -2,11 +2,18 @@
 // Anything added to `api` here becomes available in React as `window.api`.
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { Holding, NewHolding, SpotPrices } from '../shared/types'
 
+// Each function sends a message to a handler in src/main/index.ts.
 const api = {
-  // Asks the main process for silver and gold prices (see 'get-spot-prices' in src/main/index.ts).
-  getSpotPrices: (): Promise<{ silver: number; gold: number }> =>
-    ipcRenderer.invoke('get-spot-prices')
+  getSpotPrices: (): Promise<SpotPrices> => ipcRenderer.invoke('get-spot-prices'),
+
+  listHoldings: (): Promise<Holding[]> => ipcRenderer.invoke('holdings:list'),
+  addHolding: (holding: NewHolding): Promise<Holding> =>
+    ipcRenderer.invoke('holdings:add', holding),
+  updateHolding: (id: number, holding: NewHolding): Promise<Holding> =>
+    ipcRenderer.invoke('holdings:update', id, holding),
+  deleteHolding: (id: number): Promise<void> => ipcRenderer.invoke('holdings:delete', id)
 }
 
 if (process.contextIsolated) {
