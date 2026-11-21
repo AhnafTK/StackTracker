@@ -1,9 +1,19 @@
 // MAIN PROCESS: runs in Node.js. It starts the app, creates the window,
-// and fetches prices from the internet for the UI.
+// fetches prices from the internet, and owns the database.
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import {
+  initializeDatabase,
+  closeDatabase,
+  getHoldings,
+  addHolding,
+  updateHolding,
+  deleteHolding,
+  validateHolding,
+  validateId
+} from './database'
 
 // Gets the current price of one metal from gold-api.com.
 // XAG = silver, XAU = gold. Price is in USD per troy ounce.
@@ -54,6 +64,13 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // The database file lives in the app's data folder:
+  //   Windows: %APPDATA%\StackTracker\stacktracker.db
+  //   macOS:   ~/Library/Application Support/StackTracker/stacktracker.db
+  const databasePath = join(app.getPath('userData'), 'stacktracker.db')
+  initializeDatabase(databasePath)
+  console.log('Database initialized at:', databasePath)
+
   // The UI calls window.api.getSpotPrices(), which arrives here.
   // Returns silver and gold spot prices in USD per troy ounce.
   ipcMain.handle('get-spot-prices', async () => {
@@ -61,11 +78,25 @@ app.whenReady().then(() => {
     return { silver, gold }
   })
 
+  // Holdings: the UI calls window.api.getHoldings() etc., which arrive here.
+  // Anything sent from the UI is checked before it reaches the database.
+  ipcMain.handle('holdings:get', () => getHoldings())
+
+  ipcMain.handle('holdings:add', (_event, holding: unknown) => addHolding(validateHolding(holding)))
+
+  ipcMain.handle('holdings:update', (_event, id: unknown, holding: unknown) =>
+    updateHolding(validateId(id), validateHolding(holding))
+  )
+
+  ipcMain.handle('holdings:delete', (_event, id: unknown) => deleteHolding(validateId(id)))
+
   createWindow()
 
   // macOS: re-create the window when the dock icon is clicked.
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    }
   })
 })
 
@@ -74,4 +105,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Close the database cleanly when the app exits.
+app.on('will-quit', () => {
+  closeDatabase()
 })

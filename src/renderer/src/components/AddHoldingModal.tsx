@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  dollarsToCents,
   formatMoney,
   holdingValue,
   type Holding,
@@ -72,7 +73,7 @@ function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): Re
   const [purity, setPurity] = useState(String(initialHolding?.purity ?? first.purity))
   const [quantity, setQuantity] = useState(String(initialHolding?.quantity ?? 1))
   const [pricePerItem, setPricePerItem] = useState(
-    initialHolding ? String(initialHolding.pricePerItem) : ''
+    initialHolding ? (initialHolding.pricePerItemCents / 100).toFixed(2) : ''
   )
   const [purchaseDate, setPurchaseDate] = useState(
     initialHolding ? (initialHolding.purchaseDate ?? '') : today()
@@ -161,7 +162,7 @@ function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): Re
       unit,
       purity: purityNum,
       quantity: quantityNum,
-      pricePerItem: priceNum,
+      pricePerItemCents: dollarsToCents(priceNum),
       purchaseDate: purchaseDate || null
     })
   }

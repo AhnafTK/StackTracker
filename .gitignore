@@ -4,3 +4,8 @@ out
 .DS_Store
 .eslintcache
 *.log*
+
+stacktracker.db
+*.db-journal
+*.db-wal
+*.db-shm

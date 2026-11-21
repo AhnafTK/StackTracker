@@ -1,10 +1,10 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { Api } from './index'
 
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: {
-      getSpotPrices: () => Promise<{ silver: number; gold: number }>
-    }
+    // Taken straight from the `api` object in index.ts, so the two can't get out of sync.
+    api: Api
   }
 }
