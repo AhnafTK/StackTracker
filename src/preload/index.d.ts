@@ -1,16 +1,10 @@
-
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { Holding, NewHolding } from '../renderer/src/holdings'
+import type { Api } from './index'
 
 declare global {
   interface Window {
     electron: ElectronAPI
-    api: {
-  getSpotPrices: () => Promise<{ silver: number; gold: number }>
-  getHoldings: () => Promise<Holding[]>
-  addHolding: (holding: NewHolding) => Promise<Holding>
-  updateHolding: (id: string, holding: NewHolding) => Promise<Holding>
-  deleteHolding: (id: string) => Promise<void>
-}
+    // Taken straight from the `api` object in index.ts, so the two can't get out of sync.
+    api: Api
   }
 }
