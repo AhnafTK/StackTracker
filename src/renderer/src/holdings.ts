@@ -1,33 +1,8 @@
-// Calculations for precious metal holdings: weights, value and money formatting.
+// Everything the UI needs for holdings in one import: types, value math and money formatting.
 
-// The types are shared with the main process, so they live in src/shared/types.ts.
-import type { Holding, SpotPrices, WeightUnit } from '../../shared/types'
+// The types and value math are shared with the main process, so they live in src/shared.
 export type { Holding, Metal, NewHolding, SpotPrices, WeightUnit } from '../../shared/types'
-
-const GRAMS_PER_TROY_OUNCE = 31.1034768
-
-function toTroyOunces(weight: number, unit: WeightUnit): number {
-  if (unit === 'g') {
-    return weight / GRAMS_PER_TROY_OUNCE
-  }
-
-  if (unit === 'kg') {
-    return (weight * 1000) / GRAMS_PER_TROY_OUNCE
-  }
-
-  return weight
-}
-
-export function pureOunces(h: Pick<Holding, 'weight' | 'unit' | 'purity' | 'quantity'>): number {
-  return toTroyOunces(h.weight, h.unit) * h.purity * h.quantity
-}
-
-export function holdingValue(
-  h: Pick<Holding, 'metal' | 'weight' | 'unit' | 'purity' | 'quantity'>,
-  prices: SpotPrices
-): number {
-  return pureOunces(h) * prices[h.metal]
-}
+export { holdingValue, pureOunces, stackTotals } from '../../shared/calc'
 
 export function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-US', {

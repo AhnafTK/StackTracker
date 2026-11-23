@@ -2,7 +2,7 @@
 // Uses node:sqlite, which is built into the Node.js that ships with Electron.
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
-import type { Holding, NewHolding } from '../shared/types'
+import type { DailyPrice, Holding, Metal, NewHolding, StackSnapshot } from '../shared/types'
 
 let db: DatabaseSync | null = null
 
@@ -85,6 +85,41 @@ const MIGRATIONS: Array<(db: DatabaseSync) => void> = [
         )
       }
     }
+  },
+
+  // Version 2: one snapshot of the stack's total value and total paid per day,
+  // used to draw the value-over-time chart.
+  (db) => {
+    db.exec(`
+      CREATE TABLE stack_snapshots (
+        date         TEXT    PRIMARY KEY,
+        value_cents  INTEGER NOT NULL CHECK (value_cents >= 0),
+        cost_cents   INTEGER NOT NULL CHECK (cost_cents >= 0),
+        recorded_at  TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+  },
+
+  // Version 3: daily spot prices, for working out the stack's value on past days.
+  // Past days come from gold-api.com's history API; today comes from live fetches.
+  // history_coverage remembers which date range has already been requested from the
+  // API for each metal, so weekends and holidays (which have no price) aren't re-asked.
+  (db) => {
+    db.exec(`
+      CREATE TABLE price_history (
+        metal   TEXT NOT NULL CHECK (metal IN ('silver', 'gold')),
+        date    TEXT NOT NULL,
+        price   REAL NOT NULL CHECK (price > 0),
+        source  TEXT NOT NULL CHECK (source IN ('history', 'live')),
+        PRIMARY KEY (metal, date)
+      );
+
+      CREATE TABLE history_coverage (
+        metal      TEXT PRIMARY KEY CHECK (metal IN ('silver', 'gold')),
+        from_date  TEXT NOT NULL,
+        to_date    TEXT NOT NULL
+      );
+    `)
   }
 ]
 
@@ -142,7 +177,8 @@ const SELECT_HOLDING = `
     purity,
     quantity,
     price_per_item_cents AS pricePerItemCents,
-    purchase_date AS purchaseDate
+    purchase_date AS purchaseDate,
+    created_at AS createdAt
   FROM holdings
 `
 
@@ -218,6 +254,91 @@ export function updateHolding(id: string, holding: NewHolding): Holding {
 
 export function deleteHolding(id: string): void {
   database().prepare('DELETE FROM holdings WHERE id = ?').run(id)
+}
+
+// ---------------------------------------------------------------------------
+// Daily snapshots of the stack's value
+// ---------------------------------------------------------------------------
+
+/** Saves the stack's totals for a day. Saving again on the same day replaces it. */
+export function saveSnapshot(date: string, valueCents: number, costCents: number): void {
+  database()
+    .prepare(
+      `INSERT INTO stack_snapshots (date, value_cents, cost_cents) VALUES (?, ?, ?)
+       ON CONFLICT (date) DO UPDATE SET
+         value_cents = excluded.value_cents,
+         cost_cents  = excluded.cost_cents,
+         recorded_at = CURRENT_TIMESTAMP`
+    )
+    .run(date, valueCents, costCents)
+}
+
+export function deleteSnapshot(date: string): void {
+  database().prepare('DELETE FROM stack_snapshots WHERE date = ?').run(date)
+}
+
+/** Every saved day, oldest first. */
+export function getSnapshots(): StackSnapshot[] {
+  return database()
+    .prepare(
+      `SELECT date, value_cents AS valueCents, cost_cents AS costCents
+       FROM stack_snapshots
+       ORDER BY date`
+    )
+    .all() as unknown as StackSnapshot[]
+}
+
+// ---------------------------------------------------------------------------
+// Daily spot prices
+// ---------------------------------------------------------------------------
+
+/**
+ * Saves prices for some days. A price from the history API replaces anything;
+ * a live price never overwrites a history price (the history value is the
+ * day's settled average, the live one just a moment in the day).
+ */
+export function savePrices(prices: DailyPrice[], source: 'history' | 'live'): void {
+  const db = database()
+  const statement = db.prepare(
+    source === 'history'
+      ? `INSERT INTO price_history (metal, date, price, source) VALUES (?, ?, ?, 'history')
+         ON CONFLICT (metal, date) DO UPDATE SET price = excluded.price, source = 'history'`
+      : `INSERT INTO price_history (metal, date, price, source) VALUES (?, ?, ?, 'live')
+         ON CONFLICT (metal, date) DO UPDATE SET price = excluded.price
+         WHERE price_history.source = 'live'`
+  )
+  db.exec('BEGIN')
+  try {
+    for (const p of prices) statement.run(p.metal, p.date, p.price)
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+/** Every saved daily price, oldest first. */
+export function getPriceHistory(): DailyPrice[] {
+  return database()
+    .prepare('SELECT metal, date, price FROM price_history ORDER BY date, metal')
+    .all() as unknown as DailyPrice[]
+}
+
+/** The date range already requested from the history API for a metal, if any. */
+export function getCoverage(metal: Metal): { from: string; to: string } | null {
+  const row = database()
+    .prepare('SELECT from_date AS "from", to_date AS "to" FROM history_coverage WHERE metal = ?')
+    .get(metal)
+  return (row as { from: string; to: string } | undefined) ?? null
+}
+
+export function saveCoverage(metal: Metal, from: string, to: string): void {
+  database()
+    .prepare(
+      `INSERT INTO history_coverage (metal, from_date, to_date) VALUES (?, ?, ?)
+       ON CONFLICT (metal) DO UPDATE SET from_date = excluded.from_date, to_date = excluded.to_date`
+    )
+    .run(metal, from, to)
 }
 
 // ---------------------------------------------------------------------------
