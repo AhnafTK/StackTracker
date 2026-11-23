@@ -1,12 +1,15 @@
 // RENDERER: the React UI. Runs like a normal web page inside the app window.
 //
 // App owns the data (the spot prices, the list of holdings and the daily value
-// snapshots) and passes it down to the components that display it. Holdings are
+// snapshots and prices) and passes it down to the components that display it. Holdings are
 // saved in SQLite through window.api; this list is a copy of what the database
 // returned. When the prices or the holdings change, React redraws and the total
 // value and today's point on the chart are recalculated.
 import { useEffect, useState } from 'react'
 import StackChart from './components/StackChart'
+import StackSummary from './components/StackSummary'
+import AllocationCard from './components/AllocationCard'
+import SpotUpdated from './components/SpotUpdated'
 import SpotPrices from './components/SpotPrices'
 import HoldingsList from './components/HoldingsList'
 import AddHoldingModal from './components/AddHoldingModal'
@@ -16,6 +19,8 @@ import type { DailyPrice, StackSnapshot } from '../../shared/types'
 function App(): React.JSX.Element {
   const [prices, setPrices] = useState<Prices | null>(null)
   const [loadingPrice, setLoadingPrice] = useState(true)
+  // When prices were last fetched (Date.now()), for the "Spot updated … ago" note.
+  const [pricesUpdatedAt, setPricesUpdatedAt] = useState<number | null>(null)
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null)
@@ -27,6 +32,7 @@ function App(): React.JSX.Element {
 
   function showPrices(latest: Prices): void {
     setPrices(latest)
+    setPricesUpdatedAt(Date.now())
     setLoadingPrice(false)
   }
 
@@ -112,26 +118,37 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <main className="flex min-h-full justify-center px-6 py-16">
-      <div className="flex w-full max-w-3xl flex-col items-center gap-10">
-        <StackChart
-          holdings={holdings}
-          prices={prices}
-          snapshots={snapshots}
-          priceHistory={priceHistory}
-        />
+    // Two columns: the chart and holdings on the left (scrolling on their own),
+    // and a fixed sidebar of totals on the right. On narrow windows they stack.
+    <main className="h-full lg:flex">
+      <div className="min-w-0 flex-1 px-8 py-8 lg:overflow-y-auto">
+        <div className="mx-auto flex max-w-4xl flex-col gap-8">
+          <StackChart
+            holdings={holdings}
+            prices={prices}
+            snapshots={snapshots}
+            priceHistory={priceHistory}
+          />
 
-        <SpotPrices prices={prices} loading={loadingPrice} onRefresh={refreshPrices} />
+          {holdingError && <p className="text-sm text-red-400">{holdingError}</p>}
 
-        {holdingError && <p className="text-sm text-red-400">{holdingError}</p>}
-
-        <HoldingsList
-          holdings={holdings}
-          prices={prices}
-          onAddClick={() => setShowAddModal(true)}
-          onEdit={setEditingHolding}
-        />
+          <HoldingsList
+            holdings={holdings}
+            prices={prices}
+            onAddClick={() => setShowAddModal(true)}
+            onEdit={setEditingHolding}
+          />
+        </div>
       </div>
+
+      <aside className="flex flex-col gap-4 px-8 pb-8 lg:w-[25rem] lg:shrink-0 lg:overflow-y-auto lg:py-8 lg:pl-0">
+        <StackSummary holdings={holdings} />
+        <AllocationCard holdings={holdings} prices={prices} />
+        <div className="flex justify-center pt-2">
+          <SpotPrices prices={prices} loading={loadingPrice} onRefresh={refreshPrices} compact />
+        </div>
+        <SpotUpdated updatedAt={pricesUpdatedAt} />
+      </aside>
 
       {(showAddModal || editingHolding) && (
         <AddHoldingModal

@@ -20,3 +20,37 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Dark mode for built-in browser controls (scrollbars, date pickers, dropdowns). */
+html {
+  color-scheme: dark;
+}
+
+/* Thin, subtle scrollbars that only stand out on hover. Electron uses Chromium on
+   every platform, so these -webkit- rules apply on both Windows and macOS. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #2a2e36;
+  border-radius: 9999px;
+  /* A transparent border makes the visible thumb thinner than the hit area. */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #454b57;
+}
+
+/* No arrow buttons at the ends. */
+::-webkit-scrollbar-button {
+  display: none;
+}

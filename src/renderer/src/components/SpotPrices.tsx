@@ -4,13 +4,19 @@ interface Props {
   prices: { silver: number; gold: number } | null
   loading: boolean
   onRefresh: () => void
+  /** Smaller text and spacing, to fit a narrow column like the sidebar. */
+  compact?: boolean
 }
 
 // A pill showing the silver and gold spot prices, with a round refresh button.
 // The fetching itself happens in App, so the balance can use the same prices.
-function SpotPrices({ prices, loading, onRefresh }: Props): React.JSX.Element {
+function SpotPrices({ prices, loading, onRefresh, compact = false }: Props): React.JSX.Element {
   return (
-    <div className="flex items-center gap-4 rounded-full border border-neutral-800 bg-neutral-900/60 py-1.5 pl-5 pr-1.5">
+    <div
+      className={`flex items-center rounded-full border border-neutral-800 bg-neutral-900/60 py-1.5 pr-1.5 ${
+        compact ? 'gap-3 pl-4 text-[13px]' : 'gap-4 pl-5 text-sm'
+      }`}
+    >
       <Price label="Silver" dotClass="bg-neutral-300" price={prices?.silver} />
       <div className="h-5 w-px bg-neutral-700" />
       <Price label="Gold" dotClass="bg-amber-400" price={prices?.gold} />
@@ -37,7 +43,7 @@ function Price({
   price: number | undefined
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex items-center gap-2 whitespace-nowrap">
       <span className={`h-2 w-2 rounded-full ${dotClass}`} />
       <span className="text-neutral-400">{label}</span>
       <span className="font-semibold tabular-nums text-neutral-100">

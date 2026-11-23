@@ -18,8 +18,8 @@ interface Props {
 // The list of holdings: one row per holding with its value and profit/loss.
 function HoldingsList({ holdings, prices, onAddClick, onEdit }: Props): React.JSX.Element {
   return (
-    <section className="w-full rounded-2xl border border-neutral-800/70 bg-neutral-900/40">
-      <div className="flex items-center justify-between px-5 py-4">
+    <section className="w-full">
+      <div className="flex items-center justify-between pb-3">
         <h2 className="text-lg font-semibold">Holdings</h2>
         <button
           onClick={onAddClick}
@@ -30,13 +30,13 @@ function HoldingsList({ holdings, prices, onAddClick, onEdit }: Props): React.JS
       </div>
 
       {holdings.length === 0 ? (
-        <p className="border-t border-neutral-800/70 px-5 py-10 text-center text-sm text-neutral-500">
+        <p className="rounded-xl border border-dashed border-neutral-800 px-5 py-10 text-center text-sm text-neutral-500">
           No holdings yet. Click &quot;+ Add holding&quot; to add your first coin or bar.
         </p>
       ) : (
-        <ul>
+        <ul className="divide-y divide-neutral-800/70">
           {holdings.map((h) => (
-            <li key={h.id} className="border-t border-neutral-800/70">
+            <li key={h.id}>
               <HoldingRow holding={h} prices={prices} onClick={() => onEdit(h)} />
             </li>
           ))}
@@ -69,7 +69,7 @@ function HoldingRow({
       type="button"
       onClick={onClick}
       aria-label={`Edit ${h.name}`}
-      className="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-neutral-800/40"
+      className="group -mx-3 flex w-[calc(100%+1.5rem)] items-center gap-4 rounded-lg px-3 py-3.5 text-left transition hover:bg-neutral-800/40"
     >
       <HoldingIcon holding={h} />
 
