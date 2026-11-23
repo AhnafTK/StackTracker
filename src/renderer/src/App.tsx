@@ -104,6 +104,7 @@ function App(): React.JSX.Element {
       await window.api.deleteHolding(id)
 
       setHoldings((current) => current.filter((holding) => holding.id !== id))
+      setEditingHolding(null)
     } catch (error) {
       console.error(error)
       setHoldingError('Could not delete holding from SQLite.')
@@ -129,7 +130,6 @@ function App(): React.JSX.Element {
           prices={prices}
           onAddClick={() => setShowAddModal(true)}
           onEdit={setEditingHolding}
-          onDelete={deleteHolding}
         />
       </div>
 
@@ -139,6 +139,7 @@ function App(): React.JSX.Element {
           initialHolding={editingHolding ?? undefined}
           prices={prices}
           onSave={saveHolding}
+          onDelete={editingHolding ? () => deleteHolding(editingHolding.id) : undefined}
           onClose={closeHoldingModal}
         />
       )}

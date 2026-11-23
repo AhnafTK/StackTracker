@@ -10,6 +10,11 @@ function toTroyOunces(weight: number, unit: WeightUnit): number {
   return weight
 }
 
+/** Weight of ONE item in troy ounces, whatever unit it was entered in. */
+export function weightInOunces(h: Pick<Holding, 'weight' | 'unit'>): number {
+  return toTroyOunces(h.weight, h.unit)
+}
+
 /** Troy ounces of pure metal in a holding (all items combined). */
 export function pureOunces(h: Pick<Holding, 'weight' | 'unit' | 'purity' | 'quantity'>): number {
   return toTroyOunces(h.weight, h.unit) * h.purity * h.quantity
