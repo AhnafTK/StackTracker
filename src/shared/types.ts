@@ -29,7 +29,25 @@ export interface Holding {
   pricePerItemCents: number
   /** "YYYY-MM-DD", or null if not entered. */
   purchaseDate: string | null
+  /** When it was added to the app, "YYYY-MM-DD HH:MM:SS" (UTC), set by the database. */
+  createdAt: string
 }
 
 /** A holding before it's saved, i.e. what the Add/Edit form produces. */
-export type NewHolding = Omit<Holding, 'id'>
+export type NewHolding = Omit<Holding, 'id' | 'createdAt'>
+
+/** The stack's total value and total paid on one day, saved once per day. */
+export interface StackSnapshot {
+  /** "YYYY-MM-DD" (local date). */
+  date: string
+  valueCents: number
+  costCents: number
+}
+
+/** One metal's spot price on one day, in USD per troy ounce. */
+export interface DailyPrice {
+  metal: Metal
+  /** "YYYY-MM-DD" */
+  date: string
+  price: number
+}

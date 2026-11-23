@@ -1,15 +1,17 @@
 // RENDERER: the React UI. Runs like a normal web page inside the app window.
 //
-// App owns the data (the spot prices and the list of holdings) and passes it
-// down to the components that display it. Holdings are saved in SQLite through
-// window.api; this list is a copy of what the database returned. When the
-// prices or the holdings change, React redraws and the balance is recalculated.
+// App owns the data (the spot prices, the list of holdings and the daily value
+// snapshots) and passes it down to the components that display it. Holdings are
+// saved in SQLite through window.api; this list is a copy of what the database
+// returned. When the prices or the holdings change, React redraws and the total
+// value and today's point on the chart are recalculated.
 import { useEffect, useState } from 'react'
-import AccountBalance from './components/AccountBalance'
+import StackChart from './components/StackChart'
 import SpotPrices from './components/SpotPrices'
 import HoldingsList from './components/HoldingsList'
 import AddHoldingModal from './components/AddHoldingModal'
 import type { Holding, NewHolding, SpotPrices as Prices } from './holdings'
+import type { DailyPrice, StackSnapshot } from '../../shared/types'
 
 function App(): React.JSX.Element {
   const [prices, setPrices] = useState<Prices | null>(null)
@@ -18,6 +20,10 @@ function App(): React.JSX.Element {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingHolding, setEditingHolding] = useState<Holding | null>(null)
   const [holdingError, setHoldingError] = useState<string | null>(null)
+  // Past days' totals for the chart. Today's point is worked out live from `holdings`.
+  const [snapshots, setSnapshots] = useState<StackSnapshot[]>([])
+  // Saved daily prices, used to work out the stack's value on past days.
+  const [priceHistory, setPriceHistory] = useState<DailyPrice[]>([])
 
   function showPrices(latest: Prices): void {
     setPrices(latest)
@@ -39,6 +45,14 @@ function App(): React.JSX.Element {
         console.error(error)
         setHoldingError('Could not load saved holdings.')
       })
+
+    window.api.getSnapshots().then(setSnapshots).catch(console.error)
+    window.api.getPriceHistory().then(setPriceHistory).catch(console.error)
+
+    // Past prices are fetched in the background; reload them whenever new ones arrive.
+    return window.api.onPriceHistoryUpdated(() => {
+      window.api.getPriceHistory().then(setPriceHistory).catch(console.error)
+    })
   }, [])
 
   function refreshPrices(): void {
@@ -98,8 +112,13 @@ function App(): React.JSX.Element {
 
   return (
     <main className="flex min-h-full justify-center px-6 py-16">
-      <div className="flex w-full max-w-xl flex-col items-center gap-10">
-        <AccountBalance holdings={holdings} prices={prices} />
+      <div className="flex w-full max-w-3xl flex-col items-center gap-10">
+        <StackChart
+          holdings={holdings}
+          prices={prices}
+          snapshots={snapshots}
+          priceHistory={priceHistory}
+        />
 
         <SpotPrices prices={prices} loading={loadingPrice} onRefresh={refreshPrices} />
 

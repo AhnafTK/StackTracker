@@ -4,6 +4,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { localDate, stackTotals } from '../shared/calc'
+import type { SpotPrices } from '../shared/types'
 import {
   initializeDatabase,
   closeDatabase,
@@ -12,8 +14,46 @@ import {
   updateHolding,
   deleteHolding,
   validateHolding,
-  validateId
+  validateId,
+  saveSnapshot,
+  deleteSnapshot,
+  getSnapshots,
+  savePrices,
+  getPriceHistory
 } from './database'
+import { backfillPriceHistory } from './priceHistory'
+
+/**
+ * Fetches any missing past prices in the background. When new prices arrive,
+ * tells the window so the chart can reload them.
+ */
+function updatePriceHistory(): void {
+  backfillPriceHistory().then((savedNew) => {
+    if (!savedNew) return
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('price-history:updated')
+    }
+  })
+}
+
+// The most recent spot prices, kept so a snapshot can be saved when holdings change.
+let latestPrices: SpotPrices | null = null
+
+/**
+ * Saves today's total value and total paid, for the value-over-time chart.
+ * Called whenever prices are fetched or a holding changes, so the last update
+ * of the day is the one that's kept. Needs prices, so it waits for the first fetch.
+ */
+function recordTodaysSnapshot(): void {
+  if (!latestPrices) return
+  const holdings = getHoldings()
+  if (holdings.length === 0) {
+    deleteSnapshot(localDate()) // nothing to chart for today
+    return
+  }
+  const { valueCents, costCents } = stackTotals(holdings, latestPrices)
+  saveSnapshot(localDate(), valueCents, costCents)
+}
 
 // Gets the current price of one metal from gold-api.com.
 // XAG = silver, XAU = gold. Price is in USD per troy ounce.
@@ -75,20 +115,50 @@ app.whenReady().then(() => {
   // Returns silver and gold spot prices in USD per troy ounce.
   ipcMain.handle('get-spot-prices', async () => {
     const [silver, gold] = await Promise.all([fetchPrice('XAG'), fetchPrice('XAU')])
-    return { silver, gold }
+    latestPrices = { silver, gold }
+
+    // Keep today's price for the chart, then fill in any missing past days.
+    const today = localDate()
+    savePrices(
+      [
+        { metal: 'silver', date: today, price: silver },
+        { metal: 'gold', date: today, price: gold }
+      ],
+      'live'
+    )
+    recordTodaysSnapshot()
+    updatePriceHistory()
+    return latestPrices
   })
 
   // Holdings: the UI calls window.api.getHoldings() etc., which arrive here.
   // Anything sent from the UI is checked before it reaches the database.
   ipcMain.handle('holdings:get', () => getHoldings())
 
-  ipcMain.handle('holdings:add', (_event, holding: unknown) => addHolding(validateHolding(holding)))
+  ipcMain.handle('holdings:add', (_event, holding: unknown) => {
+    const saved = addHolding(validateHolding(holding))
+    recordTodaysSnapshot()
+    updatePriceHistory() // an older purchase date may need older prices
+    return saved
+  })
 
-  ipcMain.handle('holdings:update', (_event, id: unknown, holding: unknown) =>
-    updateHolding(validateId(id), validateHolding(holding))
-  )
+  ipcMain.handle('holdings:update', (_event, id: unknown, holding: unknown) => {
+    const saved = updateHolding(validateId(id), validateHolding(holding))
+    recordTodaysSnapshot()
+    updatePriceHistory()
+    return saved
+  })
 
-  ipcMain.handle('holdings:delete', (_event, id: unknown) => deleteHolding(validateId(id)))
+  ipcMain.handle('holdings:delete', (_event, id: unknown) => {
+    deleteHolding(validateId(id))
+    recordTodaysSnapshot()
+  })
+
+  // The saved daily snapshots, for the value-over-time chart.
+  ipcMain.handle('snapshots:get', () => getSnapshots())
+
+  // Saved daily prices (from the history API and live fetches), for the chart.
+  ipcMain.handle('price-history:get', () => getPriceHistory())
 
   createWindow()
 
