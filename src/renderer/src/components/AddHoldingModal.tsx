@@ -3,6 +3,7 @@ import {
   dollarsToCents,
   formatMoney,
   holdingValue,
+  type Form,
   type Holding,
   type Metal,
   type NewHolding,
@@ -15,18 +16,21 @@ interface Props {
   initialHolding?: Holding
   prices: SpotPrices | null
   onSave: (holding: NewHolding) => void
+  /** Only passed when editing: deletes the holding being edited. */
+  onDelete?: () => void
   onClose: () => void
 }
 
 interface Preset {
   label: string
   name: string
+  form: Form
   weight: string
   unit: WeightUnit
   purity: string
 }
 
-// Common coins and bars. Picking one fills in the name, weight and purity.
+// Common coins and bars. Picking one fills in the name, type, weight and purity.
 // Gold Eagles and Krugerrands are 22K (0.9167) alloy, so they weigh 1.0909 oz
 // in total to hold exactly 1 oz of pure gold.
 const PRESETS: Record<Metal, Preset[]> = {
@@ -34,27 +38,77 @@ const PRESETS: Record<Metal, Preset[]> = {
     {
       label: 'Silver Eagle',
       name: 'American Silver Eagle',
+      form: 'coin',
       weight: '1',
       unit: 'oz',
       purity: '0.999'
     },
-    { label: 'Maple Leaf', name: 'Silver Maple Leaf', weight: '1', unit: 'oz', purity: '0.9999' },
-    { label: '1 oz Round', name: '1 oz Silver Round', weight: '1', unit: 'oz', purity: '0.999' },
-    { label: '10 oz Bar', name: '10 oz Silver Bar', weight: '10', unit: 'oz', purity: '0.999' }
+    {
+      label: 'Maple Leaf',
+      name: 'Silver Maple Leaf',
+      form: 'coin',
+      weight: '1',
+      unit: 'oz',
+      purity: '0.9999'
+    },
+    {
+      label: '1 oz Round',
+      name: '1 oz Silver Round',
+      form: 'round',
+      weight: '1',
+      unit: 'oz',
+      purity: '0.999'
+    },
+    {
+      label: '10 oz Bar',
+      name: '10 oz Silver Bar',
+      form: 'bar',
+      weight: '10',
+      unit: 'oz',
+      purity: '0.999'
+    }
   ],
   gold: [
-    { label: 'Gold Maple', name: 'Gold Maple Leaf', weight: '1', unit: 'oz', purity: '0.9999' },
+    {
+      label: 'Gold Maple',
+      name: 'Gold Maple Leaf',
+      form: 'coin',
+      weight: '1',
+      unit: 'oz',
+      purity: '0.9999'
+    },
     {
       label: 'Gold Eagle',
       name: 'American Gold Eagle',
+      form: 'coin',
       weight: '1.0909',
       unit: 'oz',
       purity: '0.9167'
     },
-    { label: 'Krugerrand', name: 'Krugerrand', weight: '1.0909', unit: 'oz', purity: '0.9167' },
-    { label: '1 oz Bar', name: '1 oz Gold Bar', weight: '1', unit: 'oz', purity: '0.9999' }
+    {
+      label: 'Krugerrand',
+      name: 'Krugerrand',
+      form: 'coin',
+      weight: '1.0909',
+      unit: 'oz',
+      purity: '0.9167'
+    },
+    {
+      label: '1 oz Bar',
+      name: '1 oz Gold Bar',
+      form: 'bar',
+      weight: '1',
+      unit: 'oz',
+      purity: '0.9999'
+    }
   ]
 }
+
+const FORMS: Array<{ value: Form; label: string }> = [
+  { value: 'coin', label: 'Coin' },
+  { value: 'bar', label: 'Bar' },
+  { value: 'round', label: 'Round' }
+]
 
 const UNIT_LABEL: Record<WeightUnit, string> = { oz: 'oz t', g: 'g', kg: 'kg' }
 
@@ -64,10 +118,17 @@ function today(): string {
 }
 
 // Form inputs are kept as text while typing, then turned into numbers on submit.
-function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): React.JSX.Element {
+function AddHoldingModal({
+  initialHolding,
+  prices,
+  onSave,
+  onDelete,
+  onClose
+}: Props): React.JSX.Element {
   const first = PRESETS.silver[0]
   const [metal, setMetal] = useState<Metal>(initialHolding?.metal ?? 'silver')
   const [name, setName] = useState(initialHolding?.name ?? first.name)
+  const [form, setForm] = useState<Form>(initialHolding?.form ?? first.form)
   const [weight, setWeight] = useState(String(initialHolding?.weight ?? first.weight))
   const [unit, setUnit] = useState<WeightUnit>(initialHolding?.unit ?? first.unit)
   const [purity, setPurity] = useState(String(initialHolding?.purity ?? first.purity))
@@ -79,6 +140,8 @@ function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): Re
     initialHolding ? (initialHolding.purchaseDate ?? '') : today()
   )
   const [error, setError] = useState<string | null>(null)
+  // Deleting takes two clicks: "Delete", then "Yes, delete".
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   // Close with the Escape key.
   useEffect(() => {
@@ -99,6 +162,7 @@ function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): Re
 
   function applyPreset(p: Preset): void {
     setName(p.name)
+    setForm(p.form)
     setWeight(p.weight)
     setUnit(p.unit)
     setPurity(p.purity)
@@ -157,6 +221,7 @@ function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): Re
 
     onSave({
       metal,
+      form,
       name: name.trim(),
       weight: weightNum,
       unit,
@@ -259,19 +324,42 @@ function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): Re
             </div>
           </div>
 
-          {/* Name */}
-          <div>
-            <label className={labelClass} htmlFor="holding-name">
-              Name
-            </label>
-            <input
-              id="holding-name"
-              autoFocus
-              className={fieldClass}
-              placeholder="e.g. 1 oz DNA Silver Maple Leaf Coin"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+          {/* Name and type */}
+          <div className="flex gap-3">
+            <div className="min-w-0 flex-1">
+              <label className={labelClass} htmlFor="holding-name">
+                Name
+              </label>
+              <input
+                id="holding-name"
+                autoFocus
+                className={fieldClass}
+                placeholder="e.g. 1 oz DNA Silver Maple Leaf Coin"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div>
+              <span className={labelClass}>Type</span>
+              <div className={`${boxClass} flex gap-1 p-1`} role="radiogroup" aria-label="Type">
+                {FORMS.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={form === f.value}
+                    onClick={() => setForm(f.value)}
+                    className={`rounded-md px-3 py-1.5 text-sm transition ${
+                      form === f.value
+                        ? 'bg-neutral-800 font-medium text-white'
+                        : 'text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Weight, purity, quantity */}
@@ -395,21 +483,51 @@ function AddHoldingModal({ initialHolding, prices, onSave, onClose }: Props): Re
           {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="rounded-lg bg-amber-300 px-5 py-2.5 text-sm font-semibold text-neutral-900 hover:bg-amber-200"
-          >
-            {initialHolding ? 'Save changes' : 'Add to stack'}
-          </button>
-        </div>
+        {confirmingDelete && onDelete ? (
+          // While confirming a delete, this replaces the normal buttons.
+          <div className="mt-6 flex items-center gap-3 rounded-xl bg-red-500/10 px-4 py-3">
+            <p className="mr-auto text-sm text-red-200">Delete this holding for good?</p>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white"
+            >
+              Keep it
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="shrink-0 whitespace-nowrap rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-400"
+            >
+              Yes, delete
+            </button>
+          </div>
+        ) : (
+          <div className="mt-6 flex items-center justify-end gap-3">
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                className="mr-auto rounded-lg px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/10"
+              >
+                Delete
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-amber-300 px-5 py-2.5 text-sm font-semibold text-neutral-900 hover:bg-amber-200"
+            >
+              {initialHolding ? 'Save changes' : 'Add to stack'}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   )

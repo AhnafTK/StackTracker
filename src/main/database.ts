@@ -120,6 +120,27 @@ const MIGRATIONS: Array<(db: DatabaseSync) => void> = [
         to_date    TEXT NOT NULL
       );
     `)
+  },
+
+  // Version 4: what kind of item each holding is (coin, bar or round), shown in
+  // the holdings list. Existing holdings are guessed from their names; anything
+  // without the word "round" or "bar" is treated as a coin and can be changed by editing.
+  (db) => {
+    db.exec(`
+      ALTER TABLE holdings
+        ADD COLUMN form TEXT NOT NULL DEFAULT 'coin' CHECK (form IN ('coin', 'bar', 'round'));
+
+    `)
+
+    // Match whole words only, so "Barbados" isn't a bar. Punctuation counts as a space.
+    const words =
+      "' ' || lower(replace(replace(replace(name, '-', ' '), ',', ' '), '.', ' ')) || ' '"
+    db.exec(`
+      UPDATE holdings SET form = 'round'
+        WHERE ${words} LIKE '% round %' OR ${words} LIKE '% rounds %';
+      UPDATE holdings SET form = 'bar'
+        WHERE form = 'coin' AND (${words} LIKE '% bar %' OR ${words} LIKE '% bars %');
+    `)
   }
 ]
 
@@ -171,6 +192,7 @@ const SELECT_HOLDING = `
   SELECT
     id,
     metal,
+    form,
     name,
     weight,
     unit,
@@ -200,14 +222,15 @@ export function addHolding(holding: NewHolding): Holding {
   database()
     .prepare(
       `INSERT INTO holdings (
-        id, metal, name, weight, unit, purity,
+        id, metal, form, name, weight, unit, purity,
         quantity, price_per_item_cents, purchase_date
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       id,
       holding.metal,
+      holding.form,
       holding.name,
       holding.weight,
       holding.unit,
@@ -224,6 +247,7 @@ export function updateHolding(id: string, holding: NewHolding): Holding {
     .prepare(
       `UPDATE holdings
       SET metal = ?,
+          form = ?,
           name = ?,
           weight = ?,
           unit = ?,
@@ -235,6 +259,7 @@ export function updateHolding(id: string, holding: NewHolding): Holding {
     )
     .run(
       holding.metal,
+      holding.form,
       holding.name,
       holding.weight,
       holding.unit,
@@ -358,6 +383,8 @@ export function validateHolding(input: unknown): NewHolding {
   if (h.metal !== 'silver' && h.metal !== 'gold') fail('metal must be silver or gold')
   if (typeof h.name !== 'string' || h.name.trim() === '') fail('name is required')
   if (typeof h.weight !== 'number' || !(h.weight > 0)) fail('weight must be greater than 0')
+  if (h.form !== 'coin' && h.form !== 'bar' && h.form !== 'round')
+    fail('form must be coin, bar or round')
   if (h.unit !== 'oz' && h.unit !== 'g' && h.unit !== 'kg') fail('unit must be oz, g or kg')
   if (typeof h.purity !== 'number' || !(h.purity > 0 && h.purity <= 1))
     fail('purity must be between 0 and 1')
@@ -376,6 +403,7 @@ export function validateHolding(input: unknown): NewHolding {
     name: (h.name as string).trim(),
     weight: h.weight as number,
     unit: h.unit as NewHolding['unit'],
+    form: h.form as NewHolding['form'],
     purity: h.purity as number,
     quantity: h.quantity as number,
     pricePerItemCents: h.pricePerItemCents as number,

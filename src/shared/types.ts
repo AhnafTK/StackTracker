@@ -3,6 +3,7 @@
 
 export type Metal = 'silver' | 'gold'
 export type WeightUnit = 'oz' | 'g' | 'kg'
+export type Form = 'coin' | 'bar' | 'round'
 
 /** Spot prices in USD per troy ounce. */
 export interface SpotPrices {
@@ -14,6 +15,8 @@ export interface Holding {
   /** A UUID assigned when the holding is first saved. */
   id: string
   metal: Metal
+  /** What kind of item it is. */
+  form: Form
   name: string
   /** Weight of ONE item, in `unit`. */
   weight: number
