@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
   Area,
-  AreaChart,
-  ReferenceLine,
+  ComposedChart,
+  Line,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -56,11 +57,20 @@ function StackChart({ holdings, prices, snapshots, priceHistory }: Props): React
   const cutoff = days === null ? null : daysBefore(today, days)
   const visible = cutoff === null ? points : points.filter((p) => p.date >= cutoff)
 
-  // Leave some room above and below the line, and keep the cost basis line in view.
-  const values = visible.map((p) => p.value).concat(cost > 0 ? [cost] : [])
+  // Fit the vertical scale to the value line only, with a little room above and
+  // below, so day-to-day moves are visible. The cost basis line is cut off where it
+  // falls outside that range (common on short ranges like 1W).
+  const values = visible.map((p) => p.value)
   const min = Math.min(...values)
   const max = Math.max(...values)
-  const pad = (max - min) * 0.15 || max * 0.05 || 1
+  const pad = (max - min) * 0.15 || max * 0.02 || 1
+  const yMin = min - pad
+  const yMax = max + pad
+
+  // Label the cost basis line at its right end, if that end is in view.
+  const last = visible[visible.length - 1]
+  const showCostLabel =
+    last !== undefined && last.cost > 0 && last.cost >= yMin && last.cost <= yMax
 
   return (
     <section className="w-full">
@@ -85,7 +95,7 @@ function StackChart({ holdings, prices, snapshots, priceHistory }: Props): React
       <div className="mt-4 h-44">
         {visible.length >= 2 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={visible} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
+            <ComposedChart data={visible} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="stack-fill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={LINE_COLOR} stopOpacity={0.25} />
@@ -93,20 +103,23 @@ function StackChart({ holdings, prices, snapshots, priceHistory }: Props): React
                 </linearGradient>
               </defs>
               <XAxis dataKey="date" hide />
-              <YAxis hide domain={[min - pad, max + pad]} />
+              <YAxis hide domain={[yMin, yMax]} allowDataOverflow />
               <Tooltip
                 content={<ChartTooltip />}
                 cursor={{ stroke: MUTED, strokeDasharray: '3 3' }}
                 isAnimationActive={false}
               />
-              {cost > 0 && (
-                <ReferenceLine
-                  y={cost}
-                  stroke={MUTED}
-                  strokeDasharray="3 3"
-                  label={<CostBasisLabel text={`Cost basis ${formatMoney(cost)}`} />}
-                />
-              )}
+              {/* What had been paid so far: steps up on each purchase date. */}
+              <Line
+                type="stepAfter"
+                dataKey="cost"
+                stroke={MUTED}
+                strokeWidth={1}
+                strokeDasharray="3 3"
+                dot={false}
+                activeDot={false}
+                isAnimationActive={false}
+              />
               <Area
                 type="linear"
                 dataKey="value"
@@ -117,7 +130,21 @@ function StackChart({ holdings, prices, snapshots, priceHistory }: Props): React
                 activeDot={{ r: 4, fill: LINE_COLOR, stroke: '#0f1115', strokeWidth: 2 }}
                 isAnimationActive={false}
               />
-            </AreaChart>
+              {showCostLabel && (
+                <ReferenceDot
+                  x={last.date}
+                  y={last.cost}
+                  r={0}
+                  shape={(props: { cx?: number; cy?: number }) => (
+                    <CostBasisLabel
+                      x={props.cx ?? 0}
+                      y={props.cy ?? 0}
+                      text={`Cost basis ${formatMoney(last.cost)}`}
+                    />
+                  )}
+                />
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-neutral-800 px-6 text-center text-sm text-neutral-500">
@@ -167,25 +194,18 @@ function ChartTooltip({
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm shadow-xl">
       <p className="text-neutral-400">{date}</p>
       <p className="font-medium tabular-nums text-neutral-100">{formatMoney(point.value)}</p>
+      <p className="tabular-nums text-neutral-500">Cost basis {formatMoney(point.cost)}</p>
     </div>
   )
 }
 
-/** "Cost basis $…" sitting on the dashed line at the right edge. Recharts passes in `viewBox`. */
-function CostBasisLabel({
-  text,
-  viewBox
-}: {
-  text: string
-  viewBox?: { x?: number; y?: number; width?: number }
-}): React.JSX.Element | null {
-  if (!viewBox || viewBox.x === undefined || viewBox.y === undefined || !viewBox.width) return null
+/** "Cost basis $…" sitting on the dashed line, ending at (x, y): the line's right end. */
+function CostBasisLabel({ x, y, text }: { x: number; y: number; text: string }): React.JSX.Element {
   const width = text.length * 6 + 12
-  const x = viewBox.x + viewBox.width - width
   return (
     <g>
-      <rect x={x} y={viewBox.y - 9} width={width} height={18} rx={4} fill="#0f1115" />
-      <text x={x + width - 6} y={viewBox.y + 4} textAnchor="end" fill={MUTED} fontSize={11}>
+      <rect x={x - width} y={y - 9} width={width} height={18} rx={4} fill="#0f1115" />
+      <text x={x - 6} y={y + 4} textAnchor="end" fill={MUTED} fontSize={11}>
         {text}
       </text>
     </g>

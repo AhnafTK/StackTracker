@@ -22,12 +22,18 @@ import {
   getPriceHistory
 } from './database'
 import { backfillPriceHistory } from './priceHistory'
+import { demoSpotPrices, seedDemoData } from './demoData'
+
+// `npm run dev:demo` runs the app on sample data instead of your real database.
+// See demoData.ts.
+const DEMO_MODE = import.meta.env.MODE === 'demo'
 
 /**
  * Fetches any missing past prices in the background. When new prices arrive,
  * tells the window so the chart can reload them.
  */
 function updatePriceHistory(): void {
+  if (DEMO_MODE) return // demo mode never goes online
   backfillPriceHistory().then((savedNew) => {
     if (!savedNew) return
     for (const window of BrowserWindow.getAllWindows()) {
@@ -68,7 +74,7 @@ function createWindow(): void {
     width: 1100,
     height: 750,
     show: false,
-    title: 'StackTracker',
+    title: DEMO_MODE ? 'StackTracker (demo data)' : 'StackTracker',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -76,6 +82,9 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  // Keep the "(demo data)" title instead of letting the page's <title> replace it.
+  if (DEMO_MODE) mainWindow.on('page-title-updated', (event) => event.preventDefault())
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -107,14 +116,24 @@ app.whenReady().then(() => {
   // The database file lives in the app's data folder:
   //   Windows: %APPDATA%\StackTracker\stacktracker.db
   //   macOS:   ~/Library/Application Support/StackTracker/stacktracker.db
-  const databasePath = join(app.getPath('userData'), 'stacktracker.db')
+  // In demo mode, ':memory:' gives a temporary database that disappears on quit,
+  // so your real data is never touched.
+  const databasePath = DEMO_MODE ? ':memory:' : join(app.getPath('userData'), 'stacktracker.db')
   initializeDatabase(databasePath)
-  console.log('Database initialized at:', databasePath)
+  if (DEMO_MODE) {
+    latestPrices = seedDemoData()
+    console.log('[StackTracker] DEMO MODE: using sample data, your real database is not opened')
+  } else {
+    console.log('Database initialized at:', databasePath)
+  }
 
   // The UI calls window.api.getSpotPrices(), which arrives here.
   // Returns silver and gold spot prices in USD per troy ounce.
   ipcMain.handle('get-spot-prices', async () => {
-    const [silver, gold] = await Promise.all([fetchPrice('XAG'), fetchPrice('XAU')])
+    // Demo mode uses sample prices and never goes online.
+    const [silver, gold] = DEMO_MODE
+      ? [demoSpotPrices().silver, demoSpotPrices().gold]
+      : await Promise.all([fetchPrice('XAG'), fetchPrice('XAU')])
     latestPrices = { silver, gold }
 
     // Keep today's price for the chart, then fill in any missing past days.
@@ -127,7 +146,7 @@ app.whenReady().then(() => {
       'live'
     )
     recordTodaysSnapshot()
-    updatePriceHistory()
+    if (!DEMO_MODE) updatePriceHistory()
     return latestPrices
   })
 

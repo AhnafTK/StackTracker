@@ -74,6 +74,8 @@ export interface ValuePoint {
   date: string
   /** The stack's value that day, in dollars. */
   value: number
+  /** What had been paid for the holdings owned that day, in dollars (the cost basis). */
+  cost: number
 }
 
 /**
@@ -86,6 +88,7 @@ export interface ValuePoint {
  * - If a needed price isn't known yet (e.g. no history fetched), the day's
  *   saved snapshot is used instead, and days with neither are left out.
  * - Today uses the live prices, so the line ends at the current total.
+ * - Each point also has that day's cost basis, which steps up on each purchase date.
  */
 export function buildValueSeries(
   holdings: Holding[],
@@ -100,7 +103,7 @@ export function buildValueSeries(
   let first = starts.reduce((min, s) => (s.start < min ? s.start : min), today)
   if (snapshots.length > 0 && snapshots[0].date < first) first = snapshots[0].date
 
-  const snapshotByDate = new Map(snapshots.map((s) => [s.date, s.valueCents / 100]))
+  const snapshotByDate = new Map(snapshots.map((s) => [s.date, s]))
   const pricesByMetal: Record<Metal, DailyPrice[]> = { silver: [], gold: [] }
   for (const p of priceHistory) pricesByMetal[p.metal].push(p)
   for (const list of Object.values(pricesByMetal)) list.sort((a, b) => a.date.localeCompare(b.date))
@@ -127,13 +130,19 @@ export function buildValueSeries(
         (sum, h) => sum + pureOunces(h) * (lastPrice[h.metal] as number),
         0
       )
-      points.push({ date, value })
-    } else if (snapshotByDate.has(date)) {
-      points.push({ date, value: snapshotByDate.get(date) as number })
+      const cost = owned.reduce((sum, h) => sum + h.pricePerItemCents * h.quantity, 0) / 100
+      points.push({ date, value, cost })
+    } else {
+      const snapshot = snapshotByDate.get(date)
+      if (snapshot) {
+        points.push({ date, value: snapshot.valueCents / 100, cost: snapshot.costCents / 100 })
+      }
     }
   }
 
-  if (livePrices)
-    points.push({ date: today, value: stackTotals(holdings, livePrices).valueCents / 100 })
+  if (livePrices) {
+    const totals = stackTotals(holdings, livePrices)
+    points.push({ date: today, value: totals.valueCents / 100, cost: totals.costCents / 100 })
+  }
   return points
 }
